@@ -1,88 +1,57 @@
 using HarmonyLib;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MalumMenu;
 
-// 1. Update → Ctrl+C / Ctrl+V
 [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.Update))]
-public static class TextBoxTMP_Update_Postfix
+public static class TextBoxTMP_Update
 {
+    /// <summary>
+    /// Postfix patch of TextBoxTMP.Update to allow copying from the chatbox
+    /// </summary>
+    /// <param name="__instance">The <c>TextBoxTMP</c> instance.</param>
     public static void Postfix(TextBoxTMP __instance)
     {
-        if (!CheatToggles.chatJailbreak || !__instance.hasFocus) return;
-
-        if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)))
+        if (CheatToggles.chatJailbreak)
         {
-            if (Input.GetKeyDown(KeyCode.C))
+            if (!__instance.hasFocus){return;}
+
+            // If the user is pressing Ctrl + C, copy the text from the chatbox to the device's clipboard
+            if((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
             {
                 ClipboardHelper.PutClipboardString(__instance.text);
             }
-            else if (Input.GetKeyDown(KeyCode.V))
-            {
-                string paste = GUIUtility.systemCopyBuffer;
-                if (!string.IsNullOrEmpty(paste))
-                {
-                    __instance.text += paste;
-                    __instance.inputField.stringPosition = __instance.text.Length;
-                    __instance.inputField.MoveTextEnd(false);
-                }
-            }
         }
     }
 }
 
-// 2. 모든 문자 허용 (한글 완벽 조합)
 [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.IsCharAllowed))]
-public static class TextBoxTMP_IsCharAllowed_Prefix
+public static class TextBoxTMP_IsCharAllowed
 {
-    public static bool Prefix(char i, ref bool __result)
-    {
-        if (!CheatToggles.chatJailbreak) return true;
-
-        // 백스페이스, 엔터, 탭은 무조건 허용
-        if (i == '\b' || i == '\r' || i == '\n' || i == '\t')
-        {
-            __result = true;
-            return false;
-        }
-
-        // 한글 자모 + 완성형 + IME 중간 문자 전부 허용
-        if ((i >= 0x1100 && i <= 0x11FF) ||   // 조합용 자모
-            (i >= 0x3130 && i <= 0x318F) ||   // 호환 자모
-            (i >= 0xAC00 && i <= 0xD7AF))     // 완성형 한글
-        {
-            __result = true;
-            return false;
-        }
-
-        // 나머지는 전부 허용 (제일 간단하고 확실한 방법)
-        __result = true;
-        return false;
-    }
-}
-
-// 3. 글자 수 제한 해제
-[HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.SetText))]
-public static class TextBoxTMP_SetText_Prefix
-{
-    public static void Prefix(TextBoxTMP __instance)
+    /// <summary>
+    /// Prefix patch of TextBoxTMP.IsCharAllowed to allow all characters
+    /// </summary>
+    /// <param name="__instance">The <c>TextBoxTMP</c> instance.</param>
+    /// <param name="i">The character to be checked.</param>
+    /// <param name="__result">Original return value of <c>IsCharAllowed</c>.</param>
+    /// <returns><c>false</c> to skip the original method, <c>true</c> to allow the original method to run.</returns>
+    public static bool Prefix(TextBoxTMP __instance, char i, ref bool __result)
     {
         if (CheatToggles.chatJailbreak)
-            __instance.characterLimit = 0; // 무제한
-    }
-}
-
-// 4. 읽기전용 강제 해제 (Awake 대신 OnEnable 사용!)
-[HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.OnEnable))]
-public static class TextBoxTMP_OnEnable_Postfix
-{
-    public static void Postfix(TextBoxTMP __instance)
-    {
-        if (CheatToggles.chatJailbreak && __instance.inputField != null)
         {
-            __instance.inputField.readOnly = false;
-            __instance.readOnly = false;
-            __instance.characterLimit = 0;
+            HashSet<char> blockedSymbols = new() { '\b', '\r' };
+
+            if (blockedSymbols.Contains(i))
+            {
+                __result = false;
+                return false;
+            }
+
+            __result = true;
+            return false;
         }
+
+        return true;
     }
 }
