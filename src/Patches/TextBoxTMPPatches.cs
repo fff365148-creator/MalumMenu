@@ -9,7 +9,17 @@ public static class TextBoxTMP_Update_Postfix
 {
     public static void Postfix(TextBoxTMP __instance)
     {
-        if (!CheatToggles.chatJailbreak || !__instance.hasFocus) return;
+        if (!CheatToggles.chatJailbreak) return;
+
+        // 읽기전용/길이 제한 실시간 해제 (OnEnable 대체: 매 프레임 체크)
+        if (__instance.inputField != null)
+        {
+            __instance.inputField.readOnly = false;
+            __instance.readOnly = false;
+            __instance.characterLimit = 0; // 무제한
+        }
+
+        if (!__instance.hasFocus) return;
 
         // Ctrl+C: 복사
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
@@ -41,7 +51,7 @@ public static class TextBoxTMP_IsCharAllowed_Prefix
     {
         if (!CheatToggles.chatJailbreak) return true; // 원본 실행
 
-        // IME 필수 제어 문자: 한글 조합 중 백스페이스/엔터 무조건 허용 (이게 핵심!)
+        // IME 필수 제어 문자: 한글 조합 중 백스페이스/엔터 무조건 허용 (핵심!)
         if (i == '\b' || i == '\r' || i == '\n' || i == '\t')
         {
             __result = true;
@@ -77,19 +87,8 @@ public static class TextBoxTMP_SetText_Prefix
     public static void Prefix(TextBoxTMP __instance)
     {
         if (CheatToggles.chatJailbreak)
-            __instance.characterLimit = 0; // 무제한 입력
-    }
-}
-
-[HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.OnEnable))]
-public static class TextBoxTMP_OnEnable_Postfix
-{
-    public static void Postfix(TextBoxTMP __instance)
-    {
-        if (CheatToggles.chatJailbreak && __instance.inputField != null)
         {
-            __instance.inputField.readOnly = false;
-            __instance.readOnly = false;
+            // SetText 호출 시 길이 제한 해제 (중복 안전)
             __instance.characterLimit = 0;
         }
     }
